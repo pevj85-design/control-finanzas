@@ -14,9 +14,7 @@ st.markdown("""
     header {visibility: hidden;}
     .stTabs [data-baseweb="tab"] {font-size: 14px; padding: 10px 4px;}
     </style>
-""", unsafe_transform_allowed=True)
-
-# Conexión a Supabase
+""", unsafe_allow_html=True)# Conexión a Supabase
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
