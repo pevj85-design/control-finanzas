@@ -49,6 +49,10 @@ TARJETAS_MAESTRAS = [
     "Uala", "Klar", "Mercado Pago", "Banamex Clasica", "Santander Debito", "Banamex Debito"
 ]
 
+# Funciones auxiliares para convertir dataframes a CSV ejecutable en Excel (con codificación utf-8-sig)
+def convertir_a_csv(df):
+    return df.to_csv(index=False).encode('utf-8-sig')
+
 # ==========================================
 # 1. MENU DE INGRESO NÓMINA
 # ==========================================
@@ -65,7 +69,6 @@ with tab1:
         cuenta_in = st.selectbox("Selecciona Cuenta de Destino", ["Santander Nomina", "Banamex Nomina"], key="in_cuenta")
         
     with st.form("form_ingreso_submit", clear_on_submit=True):
-        # Usamos on_click para limpiar el estado de forma segura
         submit_in = st.form_submit_button("Guardar Ingreso", on_click=limpiar_ingreso)
         
     if submit_in and monto_in > 0:
@@ -163,8 +166,21 @@ with tab4:
             total_ingresos = df_in["monto"].sum()
             st.metric("Total Ingresos Registrados", f"${total_ingresos:,.2f}")
             
+            # Formatear el orden de las columnas antes de mostrar/exportar
+            df_in_filtrado = df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False)
+            
             with st.expander("👁️ Ver Historial de Ingresos"):
-                st.dataframe(df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False), hide_index=True)
+                st.dataframe(df_in_filtrado, hide_index=True)
+                
+            # Botón para descargar CSV de ingresos
+            csv_in = convertir_a_csv(df_in_filtrado)
+            st.download_button(
+                label="📥 Descargar Ingresos (CSV)",
+                data=csv_in,
+                file_name=f"ingresos_nomina_{datetime.date.today()}.csv",
+                mime="text/csv",
+                key="btn_dl_in"
+            )
         else:
             st.info("No hay ingresos de nómina registrados.")
     except Exception as e:
@@ -186,8 +202,20 @@ with tab4:
             df_desc = df.groupby("descripcion")["monto"].sum().reset_index().sort_values(by="monto", ascending=False)
             st.bar_chart(data=df_desc, x="descripcion", y="monto", color="#FF4B4B")
             
+            df_gastos_filtrado = df[["fecha", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False)
+            
             with st.expander("👁️ Ver Historial Completo de Gastos"):
-                st.dataframe(df[["fecha", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False), hide_index=True)
+                st.dataframe(df_gastos_filtrado, hide_index=True)
+                
+            # Botón para descargar CSV de gastos diarios
+            csv_gd = convertir_a_csv(df_gastos_filtrado)
+            st.download_button(
+                label="🛒 Descargar Gastos Diarios (CSV)",
+                data=csv_gd,
+                file_name=f"gastos_diarios_{datetime.date.today()}.csv",
+                mime="text/csv",
+                key="btn_dl_gd"
+            )
         else:
             st.info("Aún no hay gastos registrados para generar gráficos.")
             
