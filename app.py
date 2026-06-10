@@ -59,6 +59,10 @@ def limpiar_diario():
 # Creación de 5 pestañas móviles
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📥 Ingreso", "📤 Egreso", "🛒 Gasto", "📊 Resumen", "📆 Tarjetas"])
 
+# Función auxiliar para convertir DataFrames a CSV con codificación Excel compatible
+def convertir_a_csv(df): 
+    return df.to_csv(index=False).encode('utf-8-sig')
+
 # ==========================================
 # 1. MENU DE INGRESO NÓMINA
 # ==========================================
@@ -147,8 +151,7 @@ with tab3:
 # ==========================================
 with tab4:
     st.subheader("📊 Resumen General")
-    def convertir_a_csv(df): return df.to_csv(index=False).encode('utf-8-sig')
-
+    
     try:
         res_nomina = supabase.table("nomina").select("*").eq("tipo_movimiento", "Ingreso").execute()
         if res_nomina.data:
@@ -157,7 +160,7 @@ with tab4:
             df_in_f = df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False)
             with st.expander("👁️ Ver Ingresos"):
                 st.dataframe(df_in_f, hide_index=True)
-                st.download_button("📥 Descargar CSV", convertir_a_csv(df_in_f), f"ingresos_{datetime.date.today()}.csv", "text/csv")
+                st.download_button("📥 Descargar CSV de Ingresos", convertir_a_csv(df_in_f), f"ingresos_{datetime.date.today()}.csv", "text/csv", key="dl_in_tab4")
     except Exception as e: st.error(f"Error: {e}")
         
     st.markdown("---")
@@ -170,17 +173,16 @@ with tab4:
             df_g_f = df[["fecha", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False)
             with st.expander("👁️ Ver Todos los Gastos"):
                 st.dataframe(df_g_f, hide_index=True)
-                st.download_button("🛒 Descargar CSV", convertir_a_csv(df_g_f), f"gastos_{datetime.date.today()}.csv", "text/csv")
+                st.download_button("🛒 Descargar CSV de Gastos", convertir_a_csv(df_g_f), f"gastos_{datetime.date.today()}.csv", "text/csv", key="dl_gd_tab4")
     except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
-# 5. NUEVO MENU: AGENDA DE TARJETAS (Automatizado)
+# 5. MENU: AGENDA DE TARJETAS (Con Exportación a CSV)
 # ==========================================
 with tab5:
     st.subheader("📆 Saldos y Pagos del Mes")
     hoy = datetime.date.today()
     
-    # Selectores para auditar meses específicos en el iPhone
     mes_sel = st.selectbox("Ver Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=hoy.month-1)
     anio_sel = st.number_input("Ver Año", min_value=2026, max_value=2035, value=hoy.year, step=1)
     mes_num = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"].index(mes_sel) + 1
@@ -199,7 +201,6 @@ with tab5:
                 pago_msi = 0.0
                 detalles_msi = []
                 
-                # Filtrar gastos hechos con esta tarjeta específica
                 df_t = df_all[df_all["cuenta"] == t_nombre]
                 
                 for _, gasto in df_t.iterrows():
@@ -209,15 +210,11 @@ with tab5:
                     g_mes = int(gasto["mes_registro"])
                     
                     if g_plazo in ["Contado", "Una exhibición"]:
-                        # Entra en el pago del mes si corresponde al ciclo de corte seleccionado
                         if g_anio == anio_sel and g_mes == mes_num:
                             pago_contado += g_monto
                     else:
-                        # Es una compra a Meses Sin Intereses (MSI)
                         meses_totales = int(g_plazo.split()[0])
                         mensualidad = g_monto / meses_totales
-                        
-                        # Calcular los meses activos que dura el cargo diferido
                         meses_transcurridos = (anio_sel - g_anio) * 12 + (mes_num - g_mes)
                         
                         if 0 <= meses_transcurridos < meses_totales:
@@ -237,7 +234,21 @@ with tab5:
                 gran_total_mes = sum([item["Total"] for item in resumen_tarjetas])
                 st.subheader(f"**${gran_total_mes:,.2f} MXN**")
                 
+                # Crear DataFrame estructurado para permitir la exportación a CSV organizada
+                export_data = []
+                
                 for r in resumen_tarjetas:
+                    # Guardamos la info para el archivo CSV
+                    export_data.append({
+                        "Tarjeta": r["Tarjeta"],
+                        "Día de Corte": r["Corte"],
+                        "Día de Pago": r["Pago"],
+                        "Monto Contado ($)": round(r["Contado"], 2),
+                        "Monto MSI ($)": round(r["MSI"], 2),
+                        "Total a Pagar ($)": round(r["Total"], 2)
+                    })
+                    
+                    # Dibujar acordeón visual en la pantalla del iPhone
                     with st.expander(f"💳 {r['Tarjeta']} — Total: ${r['Total']:,.2f}"):
                         st.markdown(f"**Fecha de Corte:** {r['Corte']} de cada mes")
                         st.markdown(f"**Fecha Límite de Pago:** {r['Pago']} del mes siguiente")
@@ -246,6 +257,19 @@ with tab5:
                         if r["Detalles"]:
                             st.markdown("**Desglose de meses sin intereses:**")
                             for d in r["Detalles"]: st.text(d)
+                
+                st.markdown("---")
+                # Crear el botón definitivo de descarga del plan consolidated
+                df_export = pd.DataFrame(export_data)
+                csv_tarjetas = convertir_a_csv(df_export)
+                
+                st.download_button(
+                    label="📋 Descargar Plan de Pagos (CSV)",
+                    data=csv_tarjetas,
+                    file_name=f"plan_pagos_tarjetas_{mes_sel}_{anio_sel}.csv",
+                    mime="text/csv",
+                    key="dl_tarjetas_tab5"
+                )
             else:
                 st.success(f"🎉 ¡Felicidades! No tienes pagos pendientes para {mes_sel} {anio_sel}.")
         else:
