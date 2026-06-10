@@ -22,6 +22,24 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# Funciones Callback para limpiar los campos de forma segura
+def limpiar_ingreso():
+    st.session_state["in_monto"] = 0.0
+    st.session_state["in_desc"] = ""
+    st.session_state["in_tipo"] = "Efectivo"
+
+def limpiar_egreso():
+    st.session_state["eg_monto"] = 0.0
+    st.session_state["eg_desc"] = ""
+    st.session_state["eg_tipo"] = "Efectivo"
+
+def limpiar_diario():
+    st.session_state["gd_monto"] = 0.0
+    st.session_state["gd_desc"] = ""
+    st.session_state["gd_tipo"] = "Efectivo"
+    if "gd_plazo" in st.session_state:
+        st.session_state["gd_plazo"] = "Una exhibición"
+
 # Creación de pestañas móviles
 tab1, tab2, tab3, tab4 = st.tabs(["📥 Ingreso Nom.", "📤 Egreso Nom.", "🛒 Gasto Diario", "📊 Resumen"])
 
@@ -32,7 +50,7 @@ TARJETAS_MAESTRAS = [
 ]
 
 # ==========================================
-# 1. MENU DE INGRESO NÓMINA (Limpio al guardar)
+# 1. MENU DE INGRESO NÓMINA
 # ==========================================
 with tab1:
     st.subheader("📥 Ingreso de Nómina")
@@ -47,7 +65,8 @@ with tab1:
         cuenta_in = st.selectbox("Selecciona Cuenta de Destino", ["Santander Nomina", "Banamex Nomina"], key="in_cuenta")
         
     with st.form("form_ingreso_submit", clear_on_submit=True):
-        submit_in = st.form_submit_button("Guardar Ingreso")
+        # Usamos on_click para limpiar el estado de forma segura
+        submit_in = st.form_submit_button("Guardar Ingreso", on_click=limpiar_ingreso)
         
     if submit_in and monto_in > 0:
         data = {
@@ -57,18 +76,12 @@ with tab1:
         try:
             supabase.table("nomina").insert(data).execute()
             st.success("Ingreso registrado correctamente.")
-            
-            # Limpiar campos reseteando el session_state manualmente
-            st.session_state["in_monto"] = 0.0
-            st.session_state["in_desc"] = ""
-            st.session_state["in_tipo"] = "Efectivo"
-            
             st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
 
 # ==========================================
-# 2. MENU DE EGRESOS NÓMINA (Limpio al guardar)
+# 2. MENU DE EGRESOS NÓMINA
 # ==========================================
 with tab2:
     st.subheader("📤 Egreso de Nómina")
@@ -85,7 +98,7 @@ with tab2:
         cuenta_dest_eg = st.selectbox("Selecciona Cuenta de Destino", TARJETAS_MAESTRAS + ["Azteca"], key="eg_cuenta_dest")
         
     with st.form("form_egreso_submit", clear_on_submit=True):
-        submit_eg = st.form_submit_button("Guardar Egreso")
+        submit_eg = st.form_submit_button("Guardar Egreso", on_click=limpiar_egreso)
         
     if submit_eg and monto_eg > 0:
         data = {
@@ -96,18 +109,12 @@ with tab2:
         try:
             supabase.table("nomina").insert(data).execute()
             st.success("Egreso registrado correctamente.")
-            
-            # Limpiar campos reseteando el session_state manualmente
-            st.session_state["eg_monto"] = 0.0
-            st.session_state["eg_desc"] = ""
-            st.session_state["eg_tipo"] = "Efectivo"
-            
             st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
 
 # ==========================================
-# 3. MENU DE GASTOS DIARIOS (Limpio al guardar)
+# 3. MENU DE GASTOS DIARIOS
 # ==========================================
 with tab3:
     st.subheader("🛒 Registro de Gasto Diario")
@@ -126,7 +133,7 @@ with tab3:
         ], key="gd_plazo")
         
     with st.form("form_diario_submit", clear_on_submit=True):
-        submit_gd = st.form_submit_button("Guardar Gasto Diario")
+        submit_gd = st.form_submit_button("Guardar Gasto Diario", on_click=limpiar_diario)
         
     if submit_gd and monto_gd > 0:
         fecha_auto = str(datetime.date.today())
@@ -137,14 +144,6 @@ with tab3:
         try:
             supabase.table("gastos_diarios").insert(data).execute()
             st.success("Gasto diario guardado.")
-            
-            # Limpiar campos reseteando el session_state manualmente
-            st.session_state["gd_monto"] = 0.0
-            st.session_state["gd_desc"] = ""
-            st.session_state["gd_tipo"] = "Efectivo"
-            if "gd_plazo" in st.session_state:
-                st.session_state["gd_plazo"] = "Una exhibición"
-                
             st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
