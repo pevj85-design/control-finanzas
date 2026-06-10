@@ -12,7 +12,7 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
-    .stTabs [data-baseweb="tab"] {font-size: 14px; padding: 10px 4px;}
+    .stTabs [data-baseweb="tab"] {font-size: 11px; padding: 10px 2px;}
     div[data-testid="stForm"] {border: none; padding: 0;}
     </style>
 """, unsafe_allow_html=True)
@@ -21,6 +21,22 @@ st.markdown("""
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Configuración Maestra de tus Tarjetas (Fechas de Corte y Pago)
+CONFIG_TARJETAS = {
+    "Banamex Clasica": {"corte": 5, "pago": 27},
+    "Banamex Oro": {"corte": 5, "pago": 27},
+    "Plata": {"corte": 15, "pago": 14},
+    "Invex Gold": {"corte": 26, "pago": 14},
+    "Klar": {"corte": 23, "pago": 2},
+    "Mercado Pago": {"corte": 27, "pago": 6},
+    "NU": {"corte": 24, "pago": 5},
+    "Uala": {"corte": 30, "pago": 14},
+    "Vexi": {"corte": 3, "pago": 17},
+    "Didi": {"corte": 22, "pago": 7}
+}
+
+TARJETAS_MAESTRAS = sorted(list(CONFIG_TARJETAS.keys())) + ["Santander Debito", "Banamex Debito"]
 
 # Funciones Callback para limpiar los campos de forma segura
 def limpiar_ingreso():
@@ -40,25 +56,14 @@ def limpiar_diario():
     if "gd_plazo" in st.session_state:
         st.session_state["gd_plazo"] = "Una exhibición"
 
-# Creación de pestañas móviles
-tab1, tab2, tab3, tab4 = st.tabs(["📥 Ingreso Nom.", "📤 Egreso Nom.", "🛒 Gasto Diario", "📊 Resumen"])
-
-# Lista maestra de tarjetas
-TARJETAS_MAESTRAS = [
-    "Didi", "Vexi", "Invex Gold", "Banamex Oro", "Plata", "NU", 
-    "Uala", "Klar", "Mercado Pago", "Banamex Clasica", "Santander Debito", "Banamex Debito"
-]
-
-# Funciones auxiliares para convertir dataframes a CSV ejecutable en Excel (con codificación utf-8-sig)
-def convertir_a_csv(df):
-    return df.to_csv(index=False).encode('utf-8-sig')
+# Creación de 5 pestañas móviles
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📥 Ingreso", "📤 Egreso", "🛒 Gasto", "📊 Resumen", "📆 Tarjetas"])
 
 # ==========================================
 # 1. MENU DE INGRESO NÓMINA
 # ==========================================
 with tab1:
     st.subheader("📥 Ingreso de Nómina")
-    
     monto_in = st.number_input("Monto ($)", min_value=0.0, step=100.0, format="%.2f", key="in_monto")
     fecha_in = st.date_input("Fecha", datetime.date.today(), key="in_fecha")
     descripcion_in = st.text_input("Descripción", placeholder="Ej. Quincena, Bono", key="in_desc")
@@ -72,23 +77,18 @@ with tab1:
         submit_in = st.form_submit_button("Guardar Ingreso", on_click=limpiar_ingreso)
         
     if submit_in and monto_in > 0:
-        data = {
-            "fecha": str(fecha_in), "tipo_movimiento": "Ingreso", "monto": monto_in,
-            "descripcion": descripcion_in, "metodo": tipo_in, "cuenta": cuenta_in
-        }
+        data = {"fecha": str(fecha_in), "tipo_movimiento": "Ingreso", "monto": monto_in, "descripcion": descripcion_in, "metodo": tipo_in, "cuenta": cuenta_in}
         try:
             supabase.table("nomina").insert(data).execute()
-            st.success("Ingreso registrado correctamente.")
+            st.success("¡Ingreso guardado!")
             st.rerun()
-        except Exception as e:
-            st.error(f"Error: {e}")
+        except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
 # 2. MENU DE EGRESOS NÓMINA
 # ==========================================
 with tab2:
     st.subheader("📤 Egreso de Nómina")
-    
     monto_eg = st.number_input("Monto ($)", min_value=0.0, step=100.0, format="%.2f", key="eg_monto")
     fecha_eg = st.date_input("Fecha", datetime.date.today(), key="eg_fecha")
     descripcion_eg = st.text_input("Descripción", placeholder="Ej. Traspaso, Pago", key="eg_desc")
@@ -104,120 +104,151 @@ with tab2:
         submit_eg = st.form_submit_button("Guardar Egreso", on_click=limpiar_egreso)
         
     if submit_eg and monto_eg > 0:
-        data = {
-            "fecha": str(fecha_eg), "tipo_movimiento": "Egreso", "monto": monto_eg,
-            "descripcion": descripcion_eg, "metodo": tipo_eg, "cuenta": cuenta_eg,
-            "cuenta_destino": cuenta_dest_eg
-        }
+        data = {"fecha": str(fecha_eg), "tipo_movimiento": "Egreso", "monto": monto_eg, "descripcion": descripcion_eg, "metodo": tipo_eg, "cuenta": cuenta_eg, "cuenta_destino": cuenta_dest_eg}
         try:
             supabase.table("nomina").insert(data).execute()
-            st.success("Egreso registrado correctamente.")
+            st.success("¡Egreso guardado!")
             st.rerun()
-        except Exception as e:
-            st.error(f"Error: {e}")
+        except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
 # 3. MENU DE GASTOS DIARIOS
 # ==========================================
 with tab3:
     st.subheader("🛒 Registro de Gasto Diario")
-    
     monto_gd = st.number_input("Monto ($)", min_value=0.0, step=10.0, format="%.2f", key="gd_monto")
     descripcion_gd = st.text_input("Descripción", placeholder="Ej. Comida, Compra Amazon", key="gd_desc")
     tipo_gd = st.selectbox("Tipo", ["Efectivo", "Tarjeta"], key="gd_tipo")
     
     cuenta_gd = None
     plazo_gd = "Contado"
-    
     if tipo_gd == "Tarjeta":
         cuenta_gd = st.selectbox("Selecciona Tarjeta", TARJETAS_MAESTRAS, key="gd_cuenta")
-        plazo_gd = st.selectbox("Plazo de Pago", [
-            "Una exhibición", "3 meses", "6 meses", "9 meses", "12 meses", "15 meses", "18 meses", "24 meses"
-        ], key="gd_plazo")
+        if cuenta_gd not in ["Santander Debito", "Banamex Debito"]:
+            plazo_gd = st.selectbox("Plazo de Pago", ["Una exhibición", "3 meses", "6 meses", "9 meses", "12 meses", "15 meses", "18 meses", "24 meses"], key="gd_plazo")
         
     with st.form("form_diario_submit", clear_on_submit=True):
         submit_gd = st.form_submit_button("Guardar Gasto Diario", on_click=limpiar_diario)
         
     if submit_gd and monto_gd > 0:
-        fecha_auto = str(datetime.date.today())
+        hoy = datetime.date.today()
         data = {
-            "fecha": fecha_auto, "monto": monto_gd, "descripcion": descripcion_gd,
-            "metodo": tipo_gd, "cuenta": cuenta_gd, "plazo": plazo_gd
+            "fecha": str(hoy), "monto": monto_gd, "descripcion": descripcion_gd, "metodo": tipo_gd, "cuenta": cuenta_gd, "plazo": plazo_gd,
+            "anio_registro": hoy.year, "mes_registro": hoy.month
         }
         try:
             supabase.table("gastos_diarios").insert(data).execute()
-            st.success("Gasto diario guardado.")
+            st.success("¡Gasto guardado!")
             st.rerun()
-        except Exception as e:
-            st.error(f"Error: {e}")
+        except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
 # 4. MENU DE RESUMEN DE GASTOS
 # ==========================================
 with tab4:
-    st.subheader("📊 Resumen y Dashboards")
-    
-    # --- SECCIÓN DE INGRESOS ---
-    st.markdown("### 📥 Resumen de Ingresos Nómina")
+    st.subheader("📊 Resumen General")
+    def convertir_a_csv(df): return df.to_csv(index=False).encode('utf-8-sig')
+
     try:
         res_nomina = supabase.table("nomina").select("*").eq("tipo_movimiento", "Ingreso").execute()
         if res_nomina.data:
             df_in = pd.DataFrame(res_nomina.data)
-            total_ingresos = df_in["monto"].sum()
-            st.metric("Total Ingresos Registrados", f"${total_ingresos:,.2f}")
-            
-            # Formatear el orden de las columnas antes de mostrar/exportar
-            df_in_filtrado = df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False)
-            
-            with st.expander("👁️ Ver Historial de Ingresos"):
-                st.dataframe(df_in_filtrado, hide_index=True)
-                
-            # Botón para descargar CSV de ingresos
-            csv_in = convertir_a_csv(df_in_filtrado)
-            st.download_button(
-                label="📥 Descargar Ingresos (CSV)",
-                data=csv_in,
-                file_name=f"ingresos_nomina_{datetime.date.today()}.csv",
-                mime="text/csv",
-                key="btn_dl_in"
-            )
-        else:
-            st.info("No hay ingresos de nómina registrados.")
-    except Exception as e:
-        st.error(f"Error en ingresos: {e}")
+            st.metric("Total Ingresos Nómina", f"${df_in['monto'].sum():,.2f}")
+            df_in_f = df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False)
+            with st.expander("👁️ Ver Ingresos"):
+                st.dataframe(df_in_f, hide_index=True)
+                st.download_button("📥 Descargar CSV", convertir_a_csv(df_in_f), f"ingresos_{datetime.date.today()}.csv", "text/csv")
+    except Exception as e: st.error(f"Error: {e}")
         
     st.markdown("---")
-    
-    # --- SECCIÓN DE GASTOS ---
-    st.markdown("### 💳 Análisis de Gastos")
     try:
         res_gastos = supabase.table("gastos_diarios").select("*").execute()
-        
         if res_gastos.data:
             df = pd.DataFrame(res_gastos.data)
-            
-            df_tipo = df.groupby("metodo")["monto"].sum().reset_index()
-            st.bar_chart(data=df_tipo, x="metodo", y="monto", color="#262730")
-            
             df_desc = df.groupby("descripcion")["monto"].sum().reset_index().sort_values(by="monto", ascending=False)
             st.bar_chart(data=df_desc, x="descripcion", y="monto", color="#FF4B4B")
+            df_g_f = df[["fecha", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False)
+            with st.expander("👁️ Ver Todos los Gastos"):
+                st.dataframe(df_g_f, hide_index=True)
+                st.download_button("🛒 Descargar CSV", convertir_a_csv(df_g_f), f"gastos_{datetime.date.today()}.csv", "text/csv")
+    except Exception as e: st.error(f"Error: {e}")
+
+# ==========================================
+# 5. NUEVO MENU: AGENDA DE TARJETAS (Automatizado)
+# ==========================================
+with tab5:
+    st.subheader("📆 Saldos y Pagos del Mes")
+    hoy = datetime.date.today()
+    
+    # Selectores para auditar meses específicos en el iPhone
+    mes_sel = st.selectbox("Ver Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=hoy.month-1)
+    anio_sel = st.number_input("Ver Año", min_value=2026, max_value=2035, value=hoy.year, step=1)
+    mes_num = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"].index(mes_sel) + 1
+
+    try:
+        res_all_g = supabase.table("gastos_diarios").select("*").eq("metodo", "Tarjeta").execute()
+        
+        if res_all_g.data:
+            df_all = pd.DataFrame(res_all_g.data)
+            df_all["fecha"] = pd.to_datetime(df_all["fecha"])
             
-            df_gastos_filtrado = df[["fecha", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False)
+            resumen_tarjetas = []
             
-            with st.expander("👁️ Ver Historial Completo de Gastos"):
-                st.dataframe(df_gastos_filtrado, hide_index=True)
+            for t_nombre, fechas in CONFIG_TARJETAS.items():
+                pago_contado = 0.0
+                pago_msi = 0.0
+                detalles_msi = []
                 
-            # Botón para descargar CSV de gastos diarios
-            csv_gd = convertir_a_csv(df_gastos_filtrado)
-            st.download_button(
-                label="🛒 Descargar Gastos Diarios (CSV)",
-                data=csv_gd,
-                file_name=f"gastos_diarios_{datetime.date.today()}.csv",
-                mime="text/csv",
-                key="btn_dl_gd"
-            )
-        else:
-            st.info("Aún no hay gastos registrados para generar gráficos.")
+                # Filtrar gastos hechos con esta tarjeta específica
+                df_t = df_all[df_all["cuenta"] == t_nombre]
+                
+                for _, gasto in df_t.iterrows():
+                    g_monto = float(gasto["monto"])
+                    g_plazo = gasto["plazo"]
+                    g_anio = int(gasto["anio_registro"])
+                    g_mes = int(gasto["mes_registro"])
+                    
+                    if g_plazo in ["Contado", "Una exhibición"]:
+                        # Entra en el pago del mes si corresponde al ciclo de corte seleccionado
+                        if g_anio == anio_sel and g_mes == mes_num:
+                            pago_contado += g_monto
+                    else:
+                        # Es una compra a Meses Sin Intereses (MSI)
+                        meses_totales = int(g_plazo.split()[0])
+                        mensualidad = g_monto / meses_totales
+                        
+                        # Calcular los meses activos que dura el cargo diferido
+                        meses_transcurridos = (anio_sel - g_anio) * 12 + (mes_num - g_mes)
+                        
+                        if 0 <= meses_transcurridos < meses_totales:
+                            pago_msi += mensualidad
+                            detalles_msi.append(f"• {gasto['descripcion']}: msl. {meses_transcurridos+1}/{meses_totales} de ${mensualidad:,.2f}")
+                
+                total_a_pagar = pago_contado + pago_msi
+                
+                if total_a_pagar > 0:
+                    resumen_tarjetas.append({
+                        "Tarjeta": t_nombre, "Corte": f"Día {fechas['corte']}", "Pago": f"Día {fechas['pago']}",
+                        "Contado": pago_contado, "MSI": pago_msi, "Total": total_a_pagar, "Detalles": detalles_msi
+                    })
             
-    except Exception as e:
-        st.error(f"Error en gastos: {e}")
+            if resumen_tarjetas:
+                st.markdown(f"### 💳 Total a pagar en {mes_sel}:")
+                gran_total_mes = sum([item["Total"] for item in resumen_tarjetas])
+                st.subheader(f"**${gran_total_mes:,.2f} MXN**")
+                
+                for r in resumen_tarjetas:
+                    with st.expander(f"💳 {r['Tarjeta']} — Total: ${r['Total']:,.2f}"):
+                        st.markdown(f"**Fecha de Corte:** {r['Corte']} de cada mes")
+                        st.markdown(f"**Fecha Límite de Pago:** {r['Pago']} del mes siguiente")
+                        st.markdown(f"**Compras del mes (Contado):** ${r['Contado']:,.2f}")
+                        st.markdown(f"**Cargos por MSI:** ${r['MSI']:,.2f}")
+                        if r["Detalles"]:
+                            st.markdown("**Desglose de meses sin intereses:**")
+                            for d in r["Detalles"]: st.text(d)
+            else:
+                st.success(f"🎉 ¡Felicidades! No tienes pagos pendientes para {mes_sel} {anio_sel}.")
+        else:
+            st.info("Registra compras con tarjeta en la pestaña 'Gasto' para calcular tus fechas de pago.")
+            
+    except Exception as e: st.error(f"Error al calcular agenda de tarjetas: {e}")
