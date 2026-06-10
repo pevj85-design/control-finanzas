@@ -38,6 +38,13 @@ CONFIG_TARJETAS = {
 
 TARJETAS_MAESTRAS = sorted(list(CONFIG_TARJETAS.keys())) + ["Santander Debito", "Banamex Debito"]
 
+# Lista de tus Categorías para Gasto Diario
+CATEGORIAS_GASTO = [
+    "Centro Comercial", "Tianguis/Mercado", "Tienda/Oxxo/K", "Gasolina",
+    "Ropa y Calzado", "Servicios", "Internet", "Luz", "Gas", 
+    "Suplementos", "Telefonia", "E-Comerce (Amazon/Mercado/Walmart/Suburbia)", "Otros"
+]
+
 # Funciones Callback para limpiar los campos de forma segura
 def limpiar_ingreso():
     st.session_state["in_monto"] = 0.0
@@ -53,15 +60,14 @@ def limpiar_diario():
     st.session_state["gd_monto"] = 0.0
     st.session_state["gd_desc"] = ""
     st.session_state["gd_tipo"] = "Efectivo"
+    st.session_state["gd_cat"] = "Centro Comercial"
     if "gd_plazo" in st.session_state:
         st.session_state["gd_plazo"] = "Una exhibición"
 
 # Creación de 5 pestañas móviles
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📥 Ingreso", "📤 Egreso", "🛒 Gasto", "📊 Resumen", "📆 Tarjetas"])
 
-# Función auxiliar para convertir DataFrames a CSV con codificación Excel compatible
-def convertir_a_csv(df): 
-    return df.to_csv(index=False).encode('utf-8-sig')
+def convertir_a_csv(df): return df.to_csv(index=False).encode('utf-8-sig')
 
 # ==========================================
 # 1. MENU DE INGRESO NÓMINA
@@ -116,12 +122,13 @@ with tab2:
         except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
-# 3. MENU DE GASTOS DIARIOS
+# 3. MENU DE GASTOS DIARIOS (Punto 3: Menú de Categorías)
 # ==========================================
 with tab3:
     st.subheader("🛒 Registro de Gasto Diario")
     monto_gd = st.number_input("Monto ($)", min_value=0.0, step=10.0, format="%.2f", key="gd_monto")
-    descripcion_gd = st.text_input("Descripción", placeholder="Ej. Comida, Compra Amazon", key="gd_desc")
+    categoria_gd = st.selectbox("Categoría", CATEGORIAS_GASTO, key="gd_cat")
+    descripcion_gd = st.text_input("Detalle/Notas (Opcional)", placeholder="Ej. Mandado, Tenis nuevos", key="gd_desc")
     tipo_gd = st.selectbox("Tipo", ["Efectivo", "Tarjeta"], key="gd_tipo")
     
     cuenta_gd = None
@@ -136,8 +143,10 @@ with tab3:
         
     if submit_gd and monto_gd > 0:
         hoy = datetime.date.today()
+        # Si la descripción opcional se queda vacía, toma el nombre de la categoría por defecto
+        desc_final = descripcion_gd if descripcion_gd.strip() != "" else categoria_gd
         data = {
-            "fecha": str(hoy), "monto": monto_gd, "descripcion": descripcion_gd, "metodo": tipo_gd, "cuenta": cuenta_gd, "plazo": plazo_gd,
+            "fecha": str(hoy), "monto": monto_gd, "descripcion": desc_final, "categoria": categoria_gd, "metodo": tipo_gd, "cuenta": cuenta_gd, "plazo": plazo_gd,
             "anio_registro": hoy.year, "mes_registro": hoy.month
         }
         try:
@@ -147,7 +156,7 @@ with tab3:
         except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
-# 4. MENU DE RESUMEN DE GASTOS
+# 4. MENU DE RESUMEN DE GASTOS (Por Categorías)
 # ==========================================
 with tab4:
     st.subheader("📊 Resumen General")
@@ -168,16 +177,20 @@ with tab4:
         res_gastos = supabase.table("gastos_diarios").select("*").execute()
         if res_gastos.data:
             df = pd.DataFrame(res_gastos.data)
-            df_desc = df.groupby("descripcion")["monto"].sum().reset_index().sort_values(by="monto", ascending=False)
-            st.bar_chart(data=df_desc, x="descripcion", y="monto", color="#FF4B4B")
-            df_g_f = df[["fecha", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False)
+            
+            # Gráfica limpia basada en tus categorías oficiales
+            df_cat_graf = df.groupby("categoria")["monto"].sum().reset_index().sort_values(by="monto", ascending=False)
+            st.markdown("### 🛒 Gastos por Categoría")
+            st.bar_chart(data=df_cat_graf, x="categoria", y="monto", color="#FF4B4B")
+            
+            df_g_f = df[["fecha", "categoria", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False)
             with st.expander("👁️ Ver Todos los Gastos"):
                 st.dataframe(df_g_f, hide_index=True)
                 st.download_button("🛒 Descargar CSV de Gastos", convertir_a_csv(df_g_f), f"gastos_{datetime.date.today()}.csv", "text/csv", key="dl_gd_tab4")
     except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
-# 5. MENU: AGENDA DE TARJETAS (Con Exportación a CSV)
+# 5. MENU: AGENDA DE TARJETAS (Punto 4: Inteligencia e Historial de MSI)
 # ==========================================
 with tab5:
     st.subheader("📆 Saldos y Pagos del Mes")
@@ -219,7 +232,12 @@ with tab5:
                         
                         if 0 <= meses_transcurridos < meses_totales:
                             pago_msi += mensualidad
-                            detalles_msi.append(f"• {gasto['descripcion']}: msl. {meses_transcurridos+1}/{meses_totales} de ${mensualidad:,.2f}")
+                            # Punto 4: Desglose explícito que muestra exactamente cuántas mensualidades restan por pagar
+                            meses_restantes = meses_totales - (meses_transcurridos + 1)
+                            detalles_msi.append(
+                                f"• {gasto['descripcion']}: msl. {meses_transcurridos+1}/{meses_totales} "
+                                f"(${mensualidad:,.2f}) — Quedan: {meses_restantes} meses pend."
+                            )
                 
                 total_a_pagar = pago_contado + pago_msi
                 
@@ -234,42 +252,26 @@ with tab5:
                 gran_total_mes = sum([item["Total"] for item in resumen_tarjetas])
                 st.subheader(f"**${gran_total_mes:,.2f} MXN**")
                 
-                # Crear DataFrame estructurado para permitir la exportación a CSV organizada
                 export_data = []
-                
                 for r in resumen_tarjetas:
-                    # Guardamos la info para el archivo CSV
                     export_data.append({
-                        "Tarjeta": r["Tarjeta"],
-                        "Día de Corte": r["Corte"],
-                        "Día de Pago": r["Pago"],
-                        "Monto Contado ($)": round(r["Contado"], 2),
-                        "Monto MSI ($)": round(r["MSI"], 2),
-                        "Total a Pagar ($)": round(r["Total"], 2)
+                        "Tarjeta": r["Tarjeta"], "Día de Corte": r["Corte"], "Día de Pago": r["Pago"],
+                        "Monto Contado ($)": round(r["Contado"], 2), "Monto MSI ($)": round(r["MSI"], 2), "Total a Pagar ($)": round(r["Total"], 2)
                     })
                     
-                    # Dibujar acordeón visual en la pantalla del iPhone
                     with st.expander(f"💳 {r['Tarjeta']} — Total: ${r['Total']:,.2f}"):
                         st.markdown(f"**Fecha de Corte:** {r['Corte']} de cada mes")
                         st.markdown(f"**Fecha Límite de Pago:** {r['Pago']} del mes siguiente")
                         st.markdown(f"**Compras del mes (Contado):** ${r['Contado']:,.2f}")
                         st.markdown(f"**Cargos por MSI:** ${r['MSI']:,.2f}")
                         if r["Detalles"]:
-                            st.markdown("**Desglose de meses sin intereses:**")
+                            st.markdown("**Desglose e Inteligencia de MSI:**")
                             for d in r["Detalles"]: st.text(d)
                 
                 st.markdown("---")
-                # Crear el botón definitivo de descarga del plan consolidated
                 df_export = pd.DataFrame(export_data)
                 csv_tarjetas = convertir_a_csv(df_export)
-                
-                st.download_button(
-                    label="📋 Descargar Plan de Pagos (CSV)",
-                    data=csv_tarjetas,
-                    file_name=f"plan_pagos_tarjetas_{mes_sel}_{anio_sel}.csv",
-                    mime="text/csv",
-                    key="dl_tarjetas_tab5"
-                )
+                st.download_button(label="📋 Descargar Plan de Pagos (CSV)", data=csv_tarjetas, file_name=f"plan_pagos_{mes_sel}_{anio_sel}.csv", mime="text/csv", key="dl_tarjetas_tab5")
             else:
                 st.success(f"🎉 ¡Felicidades! No tienes pagos pendientes para {mes_sel} {anio_sel}.")
         else:
