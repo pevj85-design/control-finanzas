@@ -25,14 +25,14 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Creación de pestañas móviles
 tab1, tab2, tab3, tab4 = st.tabs(["📥 Ingreso Nom.", "📤 Egreso Nom.", "🛒 Gasto Diario", "📊 Resumen"])
 
-# Lista maestra de tarjetas (Reutilizable)
+# Lista maestra de tarjetas
 TARJETAS_MAESTRAS = [
     "Didi", "Vexi", "Invex Gold", "Banamex Oro", "Plata", "NU", 
     "Uala", "Klar", "Mercado Pago", "Banamex Clasica", "Santander Debito", "Banamex Debito"
 ]
 
 # ==========================================
-# 1. MENU DE INGRESO NÓMINA (Se queda igual)
+# 1. MENU DE INGRESO NÓMINA (Limpio al guardar)
 # ==========================================
 with tab1:
     st.subheader("📥 Ingreso de Nómina")
@@ -57,12 +57,18 @@ with tab1:
         try:
             supabase.table("nomina").insert(data).execute()
             st.success("Ingreso registrado correctamente.")
+            
+            # Limpiar campos reseteando el session_state manualmente
+            st.session_state["in_monto"] = 0.0
+            st.session_state["in_desc"] = ""
+            st.session_state["in_tipo"] = "Efectivo"
+            
             st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
 
 # ==========================================
-# 2. MENU DE EGRESOS NÓMINA (Actualizado)
+# 2. MENU DE EGRESOS NÓMINA (Limpio al guardar)
 # ==========================================
 with tab2:
     st.subheader("📤 Egreso de Nómina")
@@ -75,9 +81,7 @@ with tab2:
     cuenta_eg = None
     cuenta_dest_eg = None
     if tipo_eg == "Transferencia":
-        # Origen limitado a Santander Nomina y Banamex Debito
         cuenta_eg = st.selectbox("Selecciona Cuenta de Origen", ["Santander Nomina", "Banamex Debito"], key="eg_cuenta")
-        # Destino: Las mismas de gasto diario + Azteca
         cuenta_dest_eg = st.selectbox("Selecciona Cuenta de Destino", TARJETAS_MAESTRAS + ["Azteca"], key="eg_cuenta_dest")
         
     with st.form("form_egreso_submit", clear_on_submit=True):
@@ -92,12 +96,18 @@ with tab2:
         try:
             supabase.table("nomina").insert(data).execute()
             st.success("Egreso registrado correctamente.")
+            
+            # Limpiar campos reseteando el session_state manualmente
+            st.session_state["eg_monto"] = 0.0
+            st.session_state["eg_desc"] = ""
+            st.session_state["eg_tipo"] = "Efectivo"
+            
             st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
 
 # ==========================================
-# 3. MENU DE GASTOS DIARIOS (Actualizado con Plazos)
+# 3. MENU DE GASTOS DIARIOS (Limpio al guardar)
 # ==========================================
 with tab3:
     st.subheader("🛒 Registro de Gasto Diario")
@@ -111,7 +121,6 @@ with tab3:
     
     if tipo_gd == "Tarjeta":
         cuenta_gd = st.selectbox("Selecciona Tarjeta", TARJETAS_MAESTRAS, key="gd_cuenta")
-        # Selector de plazos solicitado
         plazo_gd = st.selectbox("Plazo de Pago", [
             "Una exhibición", "3 meses", "6 meses", "9 meses", "12 meses", "15 meses", "18 meses", "24 meses"
         ], key="gd_plazo")
@@ -128,12 +137,20 @@ with tab3:
         try:
             supabase.table("gastos_diarios").insert(data).execute()
             st.success("Gasto diario guardado.")
+            
+            # Limpiar campos reseteando el session_state manualmente
+            st.session_state["gd_monto"] = 0.0
+            st.session_state["gd_desc"] = ""
+            st.session_state["gd_tipo"] = "Efectivo"
+            if "gd_plazo" in st.session_state:
+                st.session_state["gd_plazo"] = "Una exhibición"
+                
             st.rerun()
         except Exception as e:
             st.error(f"Error: {e}")
 
 # ==========================================
-# 4. MENU DE RESUMEN DE GASTOS (Actualizado)
+# 4. MENU DE RESUMEN DE GASTOS
 # ==========================================
 with tab4:
     st.subheader("📊 Resumen y Dashboards")
@@ -164,14 +181,12 @@ with tab4:
         if res_gastos.data:
             df = pd.DataFrame(res_gastos.data)
             
-            # Gráficas
             df_tipo = df.groupby("metodo")["monto"].sum().reset_index()
             st.bar_chart(data=df_tipo, x="metodo", y="monto", color="#262730")
             
             df_desc = df.groupby("descripcion")["monto"].sum().reset_index().sort_values(by="monto", ascending=False)
             st.bar_chart(data=df_desc, x="descripcion", y="monto", color="#FF4B4B")
             
-            # Historial completo con la columna PLAZO añadida
             with st.expander("👁️ Ver Historial Completo de Gastos"):
                 st.dataframe(df[["fecha", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False), hide_index=True)
         else:
