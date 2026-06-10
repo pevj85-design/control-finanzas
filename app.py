@@ -6,7 +6,7 @@ from supabase import create_client
 # Configuración de pantalla móvil
 st.set_page_config(page_title="Control Financiero", page_icon="💳", layout="centered")
 
-# Inyección de CSS para ocultar menús y optimizar espacio en iPhone
+# Inyección de CSS para diseño limpio en iPhone
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -25,8 +25,14 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Creación de pestañas móviles
 tab1, tab2, tab3, tab4 = st.tabs(["📥 Ingreso Nom.", "📤 Egreso Nom.", "🛒 Gasto Diario", "📊 Resumen"])
 
+# Lista maestra de tarjetas (Reutilizable)
+TARJETAS_MAESTRAS = [
+    "Didi", "Vexi", "Invex Gold", "Banamex Oro", "Plata", "NU", 
+    "Uala", "Klar", "Mercado Pago", "Banamex Clasica", "Santander Debito", "Banamex Debito"
+]
+
 # ==========================================
-# 1. MENU DE INGRESO NÓMINA (Reactivo)
+# 1. MENU DE INGRESO NÓMINA (Se queda igual)
 # ==========================================
 with tab1:
     st.subheader("📥 Ingreso de Nómina")
@@ -36,7 +42,6 @@ with tab1:
     descripcion_in = st.text_input("Descripción", placeholder="Ej. Quincena, Bono", key="in_desc")
     tipo_in = st.selectbox("Tipo", ["Efectivo", "Transferencia"], key="in_tipo")
     
-    # El menú aparece al instante fuera del formulario
     cuenta_in = None
     if tipo_in == "Transferencia":
         cuenta_in = st.selectbox("Selecciona Cuenta de Destino", ["Santander Nomina", "Banamex Nomina"], key="in_cuenta")
@@ -57,19 +62,23 @@ with tab1:
             st.error(f"Error: {e}")
 
 # ==========================================
-# 2. MENU DE EGRESOS NÓMINA (Reactivo)
+# 2. MENU DE EGRESOS NÓMINA (Actualizado)
 # ==========================================
 with tab2:
     st.subheader("📤 Egreso de Nómina")
     
     monto_eg = st.number_input("Monto ($)", min_value=0.0, step=100.0, format="%.2f", key="eg_monto")
     fecha_eg = st.date_input("Fecha", datetime.date.today(), key="eg_fecha")
-    descripcion_eg = st.text_input("Descripción", placeholder="Ej. Traspaso, Pago de deuda", key="eg_desc")
+    descripcion_eg = st.text_input("Descripción", placeholder="Ej. Traspaso, Pago", key="eg_desc")
     tipo_eg = st.selectbox("Tipo", ["Efectivo", "Transferencia"], key="eg_tipo")
     
     cuenta_eg = None
+    cuenta_dest_eg = None
     if tipo_eg == "Transferencia":
-        cuenta_eg = st.selectbox("Selecciona Cuenta de Origen", ["Santander Nomina", "Banamex Debito", "Azteca", "Uala", "Didi"], key="eg_cuenta")
+        # Origen limitado a Santander Nomina y Banamex Debito
+        cuenta_eg = st.selectbox("Selecciona Cuenta de Origen", ["Santander Nomina", "Banamex Debito"], key="eg_cuenta")
+        # Destino: Las mismas de gasto diario + Azteca
+        cuenta_dest_eg = st.selectbox("Selecciona Cuenta de Destino", TARJETAS_MAESTRAS + ["Azteca"], key="eg_cuenta_dest")
         
     with st.form("form_egreso_submit", clear_on_submit=True):
         submit_eg = st.form_submit_button("Guardar Egreso")
@@ -77,7 +86,8 @@ with tab2:
     if submit_eg and monto_eg > 0:
         data = {
             "fecha": str(fecha_eg), "tipo_movimiento": "Egreso", "monto": monto_eg,
-            "descripcion": descripcion_eg, "metodo": tipo_eg, "cuenta": cuenta_eg
+            "descripcion": descripcion_eg, "metodo": tipo_eg, "cuenta": cuenta_eg,
+            "cuenta_destino": cuenta_dest_eg
         }
         try:
             supabase.table("nomina").insert(data).execute()
@@ -87,21 +97,24 @@ with tab2:
             st.error(f"Error: {e}")
 
 # ==========================================
-# 3. MENU DE GASTOS DIARIOS (Reactivo)
+# 3. MENU DE GASTOS DIARIOS (Actualizado con Plazos)
 # ==========================================
 with tab3:
     st.subheader("🛒 Registro de Gasto Diario")
     
     monto_gd = st.number_input("Monto ($)", min_value=0.0, step=10.0, format="%.2f", key="gd_monto")
-    descripcion_gd = st.text_input("Descripción", placeholder="Ej. Comida, Oxxo, Pasajes", key="gd_desc")
+    descripcion_gd = st.text_input("Descripción", placeholder="Ej. Comida, Compra Amazon", key="gd_desc")
     tipo_gd = st.selectbox("Tipo", ["Efectivo", "Tarjeta"], key="gd_tipo")
     
     cuenta_gd = None
+    plazo_gd = "Contado"
+    
     if tipo_gd == "Tarjeta":
-        cuenta_gd = st.selectbox("Selecciona Tarjeta", [
-            "Didi", "Vexi", "Invex Gold", "Banamex Oro", "Plata", "NU", 
-            "Uala", "Klar", "Mercado Pago", "Banamex Clasica", "Santander Debito", "Banamex Debito"
-        ], key="gd_cuenta")
+        cuenta_gd = st.selectbox("Selecciona Tarjeta", TARJETAS_MAESTRAS, key="gd_cuenta")
+        # Selector de plazos solicitado
+        plazo_gd = st.selectbox("Plazo de Pago", [
+            "Una exhibición", "3 meses", "6 meses", "9 meses", "12 meses", "15 meses", "18 meses", "24 meses"
+        ], key="gd_plazo")
         
     with st.form("form_diario_submit", clear_on_submit=True):
         submit_gd = st.form_submit_button("Guardar Gasto Diario")
@@ -110,7 +123,7 @@ with tab3:
         fecha_auto = str(datetime.date.today())
         data = {
             "fecha": fecha_auto, "monto": monto_gd, "descripcion": descripcion_gd,
-            "metodo": tipo_gd, "cuenta": cuenta_gd
+            "metodo": tipo_gd, "cuenta": cuenta_gd, "plazo": plazo_gd
         }
         try:
             supabase.table("gastos_diarios").insert(data).execute()
@@ -120,29 +133,49 @@ with tab3:
             st.error(f"Error: {e}")
 
 # ==========================================
-# 4. MENU DE RESUMEN DE GASTOS
+# 4. MENU DE RESUMEN DE GASTOS (Actualizado)
 # ==========================================
 with tab4:
     st.subheader("📊 Resumen y Dashboards")
     
+    # --- SECCIÓN DE INGRESOS ---
+    st.markdown("### 📥 Resumen de Ingresos Nómina")
+    try:
+        res_nomina = supabase.table("nomina").select("*").eq("tipo_movimiento", "Ingreso").execute()
+        if res_nomina.data:
+            df_in = pd.DataFrame(res_nomina.data)
+            total_ingresos = df_in["monto"].sum()
+            st.metric("Total Ingresos Registrados", f"${total_ingresos:,.2f}")
+            
+            with st.expander("👁️ Ver Historial de Ingresos"):
+                st.dataframe(df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False), hide_index=True)
+        else:
+            st.info("No hay ingresos de nómina registrados.")
+    except Exception as e:
+        st.error(f"Error en ingresos: {e}")
+        
+    st.markdown("---")
+    
+    # --- SECCIÓN DE GASTOS ---
+    st.markdown("### 💳 Análisis de Gastos")
     try:
         res_gastos = supabase.table("gastos_diarios").select("*").execute()
         
         if res_gastos.data:
             df = pd.DataFrame(res_gastos.data)
             
-            st.markdown("### 💳 Gastos por Tipo de Pago")
+            # Gráficas
             df_tipo = df.groupby("metodo")["monto"].sum().reset_index()
             st.bar_chart(data=df_tipo, x="metodo", y="monto", color="#262730")
             
-            st.markdown("### 📝 Gastos por Descripción")
             df_desc = df.groupby("descripcion")["monto"].sum().reset_index().sort_values(by="monto", ascending=False)
             st.bar_chart(data=df_desc, x="descripcion", y="monto", color="#FF4B4B")
             
-            with st.expander("👁️ Ver historial completo de gastos"):
-                st.dataframe(df[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False), hide_index=True)
+            # Historial completo con la columna PLAZO añadida
+            with st.expander("👁️ Ver Historial Completo de Gastos"):
+                st.dataframe(df[["fecha", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False), hide_index=True)
         else:
             st.info("Aún no hay gastos registrados para generar gráficos.")
             
     except Exception as e:
-        st.error(f"Error al cargar dashboards: {e}")
+        st.error(f"Error en gastos: {e}")
