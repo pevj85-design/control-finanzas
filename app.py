@@ -17,7 +17,27 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Conexión a Supabase
+# --- SISTEMA DE CONTROL DE ACCESO (USUARIO Y CONTRASEÑA) ---
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
+if not st.session_state["autenticado"]:
+    st.subheader("🔒 Acceso Restringido")
+    
+    # Campos de Login
+    user_input = st.text_input("Usuario:")
+    password_input = st.text_input("Contraseña:", type="password")
+    
+    if st.button("Ingresar"):
+        # Validación cruzada con los Secrets seguros
+        if user_input == st.secrets["APP_USER"] and password_input == st.secrets["APP_PASSWORD"]:
+            st.session_state["autenticado"] = True
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos. Acceso denegado.")
+    st.stop() # Detiene el renderizado del resto de la app si no está logueado
+
+# Conexión a Supabase (Solo se ejecuta si el login fue exitoso)
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -40,7 +60,7 @@ TARJETAS_MAESTRAS = sorted(list(CONFIG_TARJETAS.keys())) + ["Santander Debito", 
 
 # Lista de tus Categorías para Gasto Diario
 CATEGORIAS_GASTO = [
-    "Centro Comercial", "Tianguis/Mercado", "Tienda/Oxxo/K", "Gasolina",
+    "Centro Comercial", "Tiangiis/Mercado", "Tienda/Oxxo/K", "Gasolina",
     "Ropa y Calzado", "Servicios", "Internet", "Luz", "Gas", 
     "Suplementos", "Telefonia", "E-Comerce (Amazon/Mercado/Walmart/Suburbia)", "Otros"
 ]
@@ -122,7 +142,7 @@ with tab2:
         except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
-# 3. MENU DE GASTOS DIARIOS (Punto 3: Menú de Categorías)
+# 3. MENU DE GASTOS DIARIOS
 # ==========================================
 with tab3:
     st.subheader("🛒 Registro de Gasto Diario")
@@ -143,7 +163,6 @@ with tab3:
         
     if submit_gd and monto_gd > 0:
         hoy = datetime.date.today()
-        # Si la descripción opcional se queda vacía, toma el nombre de la categoría por defecto
         desc_final = descripcion_gd if descripcion_gd.strip() != "" else categoria_gd
         data = {
             "fecha": str(hoy), "monto": monto_gd, "descripcion": desc_final, "categoria": categoria_gd, "metodo": tipo_gd, "cuenta": cuenta_gd, "plazo": plazo_gd,
@@ -156,7 +175,7 @@ with tab3:
         except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
-# 4. MENU DE RESUMEN DE GASTOS (Por Categorías)
+# 4. MENU DE RESUMEN DE GASTOS
 # ==========================================
 with tab4:
     st.subheader("📊 Resumen General")
@@ -178,7 +197,6 @@ with tab4:
         if res_gastos.data:
             df = pd.DataFrame(res_gastos.data)
             
-            # Gráfica limpia basada en tus categorías oficiales
             df_cat_graf = df.groupby("categoria")["monto"].sum().reset_index().sort_values(by="monto", ascending=False)
             st.markdown("### 🛒 Gastos por Categoría")
             st.bar_chart(data=df_cat_graf, x="categoria", y="monto", color="#FF4B4B")
@@ -190,7 +208,7 @@ with tab4:
     except Exception as e: st.error(f"Error: {e}")
 
 # ==========================================
-# 5. MENU: AGENDA DE TARJETAS (Punto 4: Inteligencia e Historial de MSI)
+# 5. MENU: AGENDA DE TARJETAS
 # ==========================================
 with tab5:
     st.subheader("📆 Saldos y Pagos del Mes")
@@ -232,12 +250,8 @@ with tab5:
                         
                         if 0 <= meses_transcurridos < meses_totales:
                             pago_msi += mensualidad
-                            # Punto 4: Desglose explícito que muestra exactamente cuántas mensualidades restan por pagar
                             meses_restantes = meses_totales - (meses_transcurridos + 1)
-                            detalles_msi.append(
-                                f"• {gasto['descripcion']}: msl. {meses_transcurridos+1}/{meses_totales} "
-                                f"(${mensualidad:,.2f}) — Quedan: {meses_restantes} meses pend."
-                            )
+                            detalles_msi.append(f"• {gasto['descripcion']}: msl. {meses_transcurridos+1}/{meses_totales} (${mensualidad:,.2f}) — Quedan: {meses_restantes} meses pend.")
                 
                 total_a_pagar = pago_contado + pago_msi
                 
