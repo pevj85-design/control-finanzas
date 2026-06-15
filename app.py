@@ -24,20 +24,18 @@ if "autenticado" not in st.session_state:
 if not st.session_state["autenticado"]:
     st.subheader("🔒 Acceso Restringido")
     
-    # Campos de Login
     user_input = st.text_input("Usuario:")
     password_input = st.text_input("Contraseña:", type="password")
     
     if st.button("Ingresar"):
-        # Validación cruzada con los Secrets seguros
         if user_input == st.secrets["APP_USER"] and password_input == st.secrets["APP_PASSWORD"]:
             st.session_state["autenticado"] = True
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos. Acceso denegado.")
-    st.stop() # Detiene el renderizado del resto de la app si no está logueado
+    st.stop()
 
-# Conexión a Supabase (Solo se ejecuta si el login fue exitoso)
+# Conexión a Supabase
 SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -109,7 +107,8 @@ with tab1:
     if submit_in and monto_in > 0:
         data = {"fecha": str(fecha_in), "tipo_movimiento": "Ingreso", "monto": monto_in, "descripcion": descripcion_in, "metodo": tipo_in, "cuenta": cuenta_in}
         try:
-            supabase.table("nomina").insert(data).execute()
+            # CORRECCIÓN: Se remueve el .execute() para la nueva versión de la librería
+            supabase.table("nomina").insert(data)
             st.success("¡Ingreso guardado!")
             st.rerun()
         except Exception as e: st.error(f"Error: {e}")
@@ -136,7 +135,8 @@ with tab2:
     if submit_eg and monto_eg > 0:
         data = {"fecha": str(fecha_eg), "tipo_movimiento": "Egreso", "monto": monto_eg, "descripcion": descripcion_eg, "metodo": tipo_eg, "cuenta": cuenta_eg, "cuenta_destino": cuenta_dest_eg}
         try:
-            supabase.table("nomina").insert(data).execute()
+            # CORRECCIÓN: Se remueve el .execute() para la nueva versión de la librería
+            supabase.table("nomina").insert(data)
             st.success("¡Egreso guardado!")
             st.rerun()
         except Exception as e: st.error(f"Error: {e}")
@@ -169,7 +169,8 @@ with tab3:
             "anio_registro": hoy.year, "mes_registro": hoy.month
         }
         try:
-            supabase.table("gastos_diarios").insert(data).execute()
+            # CORRECCIÓN: Se remueve el .execute() para la nueva versión de la librería
+            supabase.table("gastos_diarios").insert(data)
             st.success("¡Gasto guardado!")
             st.rerun()
         except Exception as e: st.error(f"Error: {e}")
