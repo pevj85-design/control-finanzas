@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-import datetime
+from datetime import datetime
+import zoneinfo
 from supabase import create_client
 
 # Configuración de pantalla móvil
@@ -15,6 +16,11 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] {font-size: 11px; padding: 10px 2px;}
     </style>
 """, unsafe_allow_html=True)
+
+# Función para obtener la fecha y hora exacta de México
+def obtener_fecha_mexico():
+    zona_mx = zoneinfo.ZoneInfo("America/Mexico_City")
+    return datetime.now(zona_mx)
 
 # --- SISTEMA DE CONTROL DE ACCESO (USUARIO Y CONTRASEÑA) ---
 if "autenticado" not in st.session_state:
@@ -38,30 +44,22 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Configuración Maestra de tus Tarjetas (Fechas de Corte y Pago)
+# Configuración Maestra de tus Tarjetas
 CONFIG_TARJETAS = {
-    "Banamex Clasica": {"corte": 5, "pago": 27},
-    "Banamex Oro": {"corte": 5, "pago": 27},
-    "Plata": {"corte": 15, "pago": 14},
-    "Invex Gold": {"corte": 26, "pago": 14},
-    "Klar": {"corte": 23, "pago": 2},
-    "Mercado Pago": {"corte": 27, "pago": 6},
-    "NU": {"corte": 24, "pago": 5},
-    "Uala": {"corte": 30, "pago": 14},
-    "Vexi": {"corte": 3, "pago": 17},
-    "Didi": {"corte": 22, "pago": 7}
+    "Banamex Clasica": {"corte": 5, "pago": 27}, "Banamex Oro": {"corte": 5, "pago": 27},
+    "Plata": {"corte": 15, "pago": 14}, "Invex Gold": {"corte": 26, "pago": 14},
+    "Klar": {"corte": 23, "pago": 2}, "Mercado Pago": {"corte": 27, "pago": 6},
+    "NU": {"corte": 24, "pago": 5}, "Uala": {"corte": 30, "pago": 14},
+    "Vexi": {"corte": 3, "pago": 17}, "Didi": {"corte": 22, "pago": 7}
 }
-
 TARJETAS_MAESTRAS = sorted(list(CONFIG_TARJETAS.keys())) + ["Santander Debito", "Banamex Debito"]
 
-# Lista de tus Categorías para Gasto Diario
 CATEGORIAS_GASTO = [
     "Centro Comercial", "Tiangiis/Mercado", "Tienda/Oxxo/K", "Gasolina",
     "Ropa y Calzado", "Servicios", "Internet", "Luz", "Gas", 
     "Suplementos", "Telefonia", "E-Comerce (Amazon/Mercado/Walmart/Suburbia)", "Otros"
 ]
 
-# Creación de 5 pestañas móviles
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📥 Ingreso", "📤 Egreso", "🛒 Gasto", "📊 Resumen", "📆 Tarjetas"])
 
 def convertir_a_csv(df): return df.to_csv(index=False).encode('utf-8-sig')
@@ -72,7 +70,8 @@ def convertir_a_csv(df): return df.to_csv(index=False).encode('utf-8-sig')
 with tab1:
     st.subheader("📥 Ingreso de Nómina")
     monto_in = st.number_input("Monto ($)", min_value=0.0, step=100.0, format="%.2f", key="in_monto")
-    fecha_in = st.date_input("Fecha", datetime.date.today(), key="in_fecha")
+    # Forzar por defecto el día actual de México en el calendario
+    fecha_in = st.date_input("Fecha", obtener_fecha_mexico().date(), key="in_fecha")
     descripcion_in = st.text_input("Descripción", placeholder="Ej. Quincena, Bono", key="in_desc")
     tipo_in = st.selectbox("Tipo", ["Efectivo", "Transferencia"], key="in_tipo")
     
@@ -97,7 +96,7 @@ with tab1:
 with tab2:
     st.subheader("📤 Egreso de Nómina")
     monto_eg = st.number_input("Monto ($)", min_value=0.0, step=100.0, format="%.2f", key="eg_monto")
-    fecha_eg = st.date_input("Fecha", datetime.date.today(), key="eg_fecha")
+    fecha_eg = st.date_input("Fecha", obtener_fecha_mexico().date(), key="eg_fecha")
     descripcion_eg = st.text_input("Descripción", placeholder="Ej. Traspaso, Pago", key="eg_desc")
     tipo_eg = st.selectbox("Tipo", ["Efectivo", "Transferencia"], key="eg_tipo")
     
@@ -137,11 +136,11 @@ with tab3:
         
     if st.button("Guardar Gasto Diario", key="btn_gasto"):
         if monto_gd > 0:
-            hoy = datetime.date.today()
+            tiempo_mx = obtener_fecha_mexico()
             desc_final = descripcion_gd if descripcion_gd.strip() != "" else categoria_gd
             data = {
-                "fecha": str(hoy), "monto": monto_gd, "descripcion": desc_final, "categoria": categoria_gd, "metodo": tipo_gd, "cuenta": cuenta_gd, "plazo": plazo_gd,
-                "anio_registro": hoy.year, "mes_registro": hoy.month
+                "fecha": str(tiempo_mx.date()), "monto": monto_gd, "descripcion": desc_final, "categoria": categoria_gd, "metodo": tipo_gd, "cuenta": cuenta_gd, "plazo": plazo_gd,
+                "anio_registro": tiempo_mx.year, "mes_registro": tiempo_mx.month
             }
             try:
                 supabase.table("gastos_diarios").insert(data)
@@ -193,10 +192,10 @@ with tab4:
 # ==========================================
 with tab5:
     st.subheader("📆 Saldos y Pagos del Mes")
-    hoy = datetime.date.today()
+    tiempo_mx = obtener_fecha_mexico()
     
-    mes_sel = st.selectbox("Ver Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=hoy.month-1)
-    anio_sel = st.number_input("Ver Año", min_value=2026, max_value=2035, value=hoy.year, step=1)
+    mes_sel = st.selectbox("Ver Mes", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=tiempo_mx.month-1)
+    anio_sel = st.number_input("Ver Año", min_value=2026, max_value=2035, value=tiempo_mx.year, step=1)
     mes_num = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"].index(mes_sel) + 1
 
     try:
@@ -204,10 +203,8 @@ with tab5:
         
         if res_all_g.data and len(res_all_g.data) > 0:
             df_all = pd.DataFrame(res_all_g.data)
-            df_all["fecha"] = pd.to_datetime(df_all["fecha"])
             
             resumen_tarjetas = []
-            
             for t_nombre, fechas in CONFIG_TARJETAS.items():
                 pago_contado = 0.0
                 pago_msi = 0.0
