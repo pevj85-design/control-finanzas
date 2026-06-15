@@ -158,24 +158,48 @@ with tab3:
             st.warning("El monto debe ser mayor a 0")
 
 # ==========================================
-# 4. MENU DE RESUMEN DE GASTOS
+# 4. MENU DE RESUMEN DE GASTOS (CORREGIDO)
 # ==========================================
 with tab4:
     st.subheader("📊 Resumen General")
     tiempo_hoy = obtener_fecha_mexico().date()
     
     try:
-        res_nomina = supabase.table("nomina").select("*").eq("tipo_movimiento", "Ingreso").execute()
+        # Descargar todos los movimientos de la nómina (ingresos y egresos)
+        res_nomina = supabase.table("nomina").select("*").execute()
+        
         if res_nomina.data and len(res_nomina.data) > 0:
-            df_in = pd.DataFrame(res_nomina.data)
-            st.metric("Total Ingresos Nómina", f"${df_in['monto'].sum():,.2f}")
-            df_in_f = df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False)
-            with st.expander("👁️ Ver Ingresos"):
-                st.dataframe(df_in_f, hide_index=True)
-                st.download_button("📥 Descargar CSV de Ingresos", convertir_a_csv(df_in_f), f"ingresos_{tiempo_hoy}.csv", "text/csv", key="dl_in_tab4")
+            df_nom_completo = pd.DataFrame(res_nomina.data)
+            
+            # Separar datos usando filtros de Pandas
+            df_in = df_nom_completo[df_nom_completo["tipo_movimiento"] == "Ingreso"]
+            df_eg = df_nom_completo[df_nom_completo["tipo_movimiento"] == "Egreso"]
+            
+            # Poner las métricas lado a lado en columnas limpias
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Total Ingresos", f"${df_in['monto'].sum():,.2f}")
+            with col2:
+                st.metric("Total Egresos Nómina", f"${df_eg['monto'].sum():,.2f}")
+            
+            # Desglose de bloques desplegables
+            if not df_in.empty:
+                df_in_f = df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False)
+                with st.expander("📥 Ver Historial de Ingresos"):
+                    st.dataframe(df_in_f, hide_index=True)
+                    st.download_button("📥 Descargar CSV de Ingresos", convertir_a_csv(df_in_f), f"ingresos_{tiempo_hoy}.csv", "text/csv", key="dl_in_tab4")
+            
+            if not df_eg.empty:
+                df_eg_f = df_eg[["fecha", "descripcion", "monto", "metodo", "cuenta", "cuenta_destino"]].sort_values(by="fecha", ascending=False)
+                # Renombrar columnas para que se entienda el traspaso en la tabla móvil
+                df_eg_f.columns = ["Fecha", "Descripción", "Monto", "Método", "Origen", "Destino"]
+                with st.expander("📤 Ver Historial de Egresos"):
+                    st.dataframe(df_eg_f, hide_index=True)
+                    st.download_button("📤 Descargar CSV de Egresos", convertir_a_csv(df_eg_f), f"egresos_{tiempo_hoy}.csv", "text/csv", key="dl_eg_tab4")
         else:
-            st.info("No hay ingresos de nómina registrados en este ciclo.")
-    except Exception as e: st.error(f"Error en bloque ingresos: {e}")
+            st.info("No hay movimientos de nómina registrados en este ciclo.")
+            
+    except Exception as e: st.error(f"Error en bloque ingresos/egresos: {e}")
         
     st.markdown("---")
     try:
@@ -188,7 +212,7 @@ with tab4:
             st.bar_chart(data=df_cat_graf, x="categoria", y="monto", color="#FF4B4B")
             
             df_g_f = df[["fecha", "categoria", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False)
-            with st.expander("👁️ Ver Todos los Gastos"):
+            with st.expander("🛒 Ver Todos los Gastos Diarios"):
                 st.dataframe(df_g_f, hide_index=True)
                 st.download_button("🛒 Descargar CSV de Gastos", convertir_a_csv(df_g_f), f"gastos_{tiempo_hoy}.csv", "text/csv", key="dl_gd_tab4")
         else:
