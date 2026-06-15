@@ -260,4 +260,21 @@ with tab5:
                     })
                     
                     with st.expander(f"💳 {r['Tarjeta']} — Total: ${r['Total']:,.2f}"):
-                        st.
+                        st.markdown(f"**Fecha de Corte:** {r['Corte']} de cada mes")
+                        st.markdown(f"**Fecha Límite de Pago:** {r['Pago']} del mes siguiente")
+                        st.markdown(f"**Compras del mes (Contado):** ${r['Contado']:,.2f}")
+                        st.markdown(f"**Cargos por MSI:** ${r['MSI']:,.2f}")
+                        if r["Detalles"]:
+                            st.markdown("**Desglose e Inteligencia de MSI:**")
+                            for d in r["Detalles"]: st.text(d)
+                
+                st.markdown("---")
+                df_export = pd.DataFrame(export_data)
+                csv_tarjetas = convertir_a_csv(df_export)
+                st.download_button(label="📋 Descargar Plan de Pagos (CSV)", data=csv_tarjetas, file_name=f"plan_pagos_{mes_sel}_{anio_sel}.csv", mime="text/csv", key="dl_tarjetas_tab5")
+            else:
+                st.success(f"🎉 ¡Felicidades! No tienes pagos pendientes para {mes_sel} {anio_sel}.")
+        else:
+            st.info("Registra compras con tarjeta en la pestaña 'Gasto' para calcular tus fechas de pago.")
+            
+    except Exception as e: st.error(f"Error al calcular agenda de tarjetas: {e}")
