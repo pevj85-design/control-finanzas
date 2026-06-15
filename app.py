@@ -162,6 +162,7 @@ with tab3:
 # ==========================================
 with tab4:
     st.subheader("📊 Resumen General")
+    tiempo_hoy = obtener_fecha_mexico().date()
     
     try:
         res_nomina = supabase.table("nomina").select("*").eq("tipo_movimiento", "Ingreso").execute()
@@ -171,7 +172,7 @@ with tab4:
             df_in_f = df_in[["fecha", "descripcion", "monto", "metodo", "cuenta"]].sort_values(by="fecha", ascending=False)
             with st.expander("👁️ Ver Ingresos"):
                 st.dataframe(df_in_f, hide_index=True)
-                st.download_button("📥 Descargar CSV de Ingresos", convertir_a_csv(df_in_f), f"ingresos_{datetime.date.today()}.csv", "text/csv", key="dl_in_tab4")
+                st.download_button("📥 Descargar CSV de Ingresos", convertir_a_csv(df_in_f), f"ingresos_{tiempo_hoy}.csv", "text/csv", key="dl_in_tab4")
         else:
             st.info("No hay ingresos de nómina registrados en este ciclo.")
     except Exception as e: st.error(f"Error en bloque ingresos: {e}")
@@ -189,7 +190,7 @@ with tab4:
             df_g_f = df[["fecha", "categoria", "descripcion", "monto", "metodo", "cuenta", "plazo"]].sort_values(by="fecha", ascending=False)
             with st.expander("👁️ Ver Todos los Gastos"):
                 st.dataframe(df_g_f, hide_index=True)
-                st.download_button("🛒 Descargar CSV de Gastos", convertir_a_csv(df_g_f), f"gastos_{datetime.date.today()}.csv", "text/csv", key="dl_gd_tab4")
+                st.download_button("🛒 Descargar CSV de Gastos", convertir_a_csv(df_g_f), f"gastos_{tiempo_hoy}.csv", "text/csv", key="dl_gd_tab4")
         else:
             st.info("Aún no tienes gastos registrados hoy. Las gráficas aparecerán en cuanto agregues tu primer registro en la pestaña 'Gasto'.")
     except Exception as e: st.error(f"Error en bloque gastos: {e}")
@@ -259,21 +260,4 @@ with tab5:
                     })
                     
                     with st.expander(f"💳 {r['Tarjeta']} — Total: ${r['Total']:,.2f}"):
-                        st.markdown(f"**Fecha de Corte:** {r['Corte']} de cada mes")
-                        st.markdown(f"**Fecha Límite de Pago:** {r['Pago']} del mes siguiente")
-                        st.markdown(f"**Compras del mes (Contado):** ${r['Contado']:,.2f}")
-                        st.markdown(f"**Cargos por MSI:** ${r['MSI']:,.2f}")
-                        if r["Detalles"]:
-                            st.markdown("**Desglose e Inteligencia de MSI:**")
-                            for d in r["Detalles"]: st.text(d)
-                
-                st.markdown("---")
-                df_export = pd.DataFrame(export_data)
-                csv_tarjetas = convertir_a_csv(df_export)
-                st.download_button(label="📋 Descargar Plan de Pagos (CSV)", data=csv_tarjetas, file_name=f"plan_pagos_{mes_sel}_{anio_sel}.csv", mime="text/csv", key="dl_tarjetas_tab5")
-            else:
-                st.success(f"🎉 ¡Felicidades! No tienes pagos pendientes para {mes_sel} {anio_sel}.")
-        else:
-            st.info("Registra compras con tarjeta en la pestaña 'Gasto' para calcular tus fechas de pago.")
-            
-    except Exception as e: st.error(f"Error al calcular agenda de tarjetas: {e}")
+                        st.
